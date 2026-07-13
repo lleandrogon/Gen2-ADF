@@ -1,12 +1,13 @@
-import pandas as pd
 import os
+import pandas as pd
 import azure.functions as func
 from dotenv import load_dotenv
 
-app = func.FunctionApp()
+app = func.FunctionApp(http_auth_level=func.AuthLevel.FUNCTION)
 
-@app.route(route = "etl")
-def etl(req: func.HttpRequest):
+@app.route(route="etl")
+def etl(req: func.HttpRequest) -> func.HttpResponse:
+
     load_dotenv()
 
     account_name = os.getenv("AZURE_STORAGE_ACCOUNT_NAME")
@@ -14,41 +15,34 @@ def etl(req: func.HttpRequest):
 
     container_bronze = "bronze"
     file_bronze = "inscricoes.csv"
-    storage_options = {'account_name': account_name, 'account_key': account_key}
+
+    storage_options = {
+        "account_name": account_name,
+        "account_key": account_key
+    }
 
     azure_path = f"az://{container_bronze}/{file_bronze}"
 
     df = pd.read_csv(
         azure_path,
-        storage_options = storage_options
+        storage_options=storage_options
     )
 
     df["email"] = df["email"].str.strip().str.lower()
-
     df["cidade"] = df["cidade"].str.strip().str.title()
-
-    df["data_cadastro"] = pd.to_datetime(
-        df["data_cadastro"]
-    ).dt.date
+    df["data_cadastro"] = pd.to_datetime(df["data_cadastro"]).dt.date
 
     container_silver = "silver"
     file_silver = "inscricoes_limpas.parquet"
     path_silver = f"az://{container_silver}/{file_silver}"
 
-    try:
-        print("Iniciando a gravação dos dados na Silver")
-
-        df.to_parquet(
-            path_silver,
-            storage_options = storage_options,
-            index = False
-        )
-
-        print("✅ Dados gravados com sucesso na camada Silver!")
-    except:
-        print("❌ Gravação de dados na Silver falhou!")
+    df.to_parquet(
+        path_silver,
+        storage_options=storage_options,
+        index=False
+    )
 
     return func.HttpResponse(
         "ETL executado com sucesso!",
-        status_code = 200
+        status_code=200
     )
